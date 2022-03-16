@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+#play-button {
+  position: absolute;
+  top: 120px;
+  left: 30px;
+  background: #004276;
+  padding-right: 26px;
+  border-radius: 2px;
+  border: none;
+  color: white;
+  margin: 0;
+  padding: 0 12px;
+  width: 68px;
+  cursor: pointer;
+  height: 30px;
+  font: 13px sans-serif;
+}
+
+#play-button:hover {
+  background-color: #064d84;
+}
+
+#play-button:active {
+  background-color: #002657;
+}
+
+.ticks {
+  font: 10px sans-serif;
+}
+
+.track,
+.track-inset,
+.track-overlay {
+  stroke-linecap: round;
+}
+
+.track {
+  stroke: #000;
+  stroke-opacity: 0.3;
+  stroke-width: 10px;
+}
+
+.track-inset {
+  stroke: #ddd;
+  stroke-width: 8px;
+}
+
+.track-overlay {
+  pointer-events: stroke;
+  stroke-width: 50px;
+  cursor: crosshair;
+  visibility: hidden;
+}
+
+.handle {
+  fill: #fff;
+  stroke: #000;
+  stroke-opacity: 0.5;
+  stroke-width: 1.25px;
+}
+
+</style>
+<button id="play-button">Pause</button>
+<svg width="960" height="250"></svg>
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script>
+
+let svg = d3.select("svg"),
+    margin = { right: 50, left: 120 },
+    width = +svg.attr("width") - margin.left - margin.right,
+    height = +svg.attr("height");
+
+let target = actual = 0,
+    alpha = 0.2,
+    timer = d3.timer(updateTween),
+    stepTimer,
+    moving = false,
+    maxValue = 180 - 1,
+    trailLength = 10;
+
+const playButton = d3.select("#play-button");
+
+const x = d3.scaleLinear()
+    .domain([0, 24])
+    .range([0, width+5])
+    .clamp(true);
+
+const slider = svg.append("g")
+    .attr("class", "slider")
+    .attr("transform", "translate(" + margin.left + "," + height / 2 + ")");
+
+slider.append("line")
+    .attr("class", "track")
+    .attr("x1", x.range()[0])
+    .attr("x2", x.range()[1])
+  .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+    .attr("class", "track-inset")
+  .select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+    .attr("class", "track-overlay")
+    .call(d3.drag()
+        .on("start.interrupt", () => slider.interrupt())
+        .on("start drag", () => update(x.invert(d3.event.x))));
+
+slider.insert("g", ".track-overlay")
+    .attr("class", "ticks")
+    .attr("transform", "translate(0," + 18 + ")")
+  .selectAll("text")
+  .data(x.ticks(10))
+  .enter().append("text")
+    .attr("x", x)
+    .attr("text-anchor", "middle")
+    .text(d => d );
+
+const handle = slider.insert("circle", ".track-overlay")
+    .attr("class", "handle")
+    .attr("r", 9);
+
+d3.select(window)
+    .on("keydown", keydowned);
+
+playButton
+    .on("click", paused)
+    .each(paused);
+
+function update(d) {
+  target = d;
+  moving = true;
+  timer.restart(updateTween);
+}
+
+function updateTween() {
+  let diff = target - actual;
+  if (Math.abs(diff) < 1e-3) actual = target, timer.stop();
+  else actual += diff * alpha;
+ handle.attr("cx", x(actual));
+  // svg.style("background-color", d3.hsl(actual, 0.8, 0.8));
+}
+
+function keydowned() {
+  let currentValue = actual;
+  if (d3.event.metaKey || d3.event.altKey) return;
+  switch (d3.event.keyCode) {
+    case 37: currentValue = Math.max(x.domain()[0], actual - trailLength); break;
+    case 39: currentValue = Math.min(x.domain()[1], actual + trailLength); break;
+    default: return;
+  }
+  update(currentValue);
+  paused();
+}
+
+function paused() {
+  if (moving) {
+    slider.interrupt();
+    clearInterval(stepTimer);
+    moving = false;
+    playButton.text("Play");
+  } else {
+    if (actual > maxValue) actual = 0;
+    stepTimer = setInterval(step, 100);
+    moving = true;
+    playButton.text("Pause");
+  }
+}
+
+function step() {
+  if (actual > maxValue) paused();
+  else update(actual + trailLength / 50);
+}
+
+</script>
